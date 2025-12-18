@@ -3,6 +3,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from pipeline import run_pipeline
 import tempfile
 import os
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
     title="OCR → Schedule Parser API",
