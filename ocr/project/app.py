@@ -10,7 +10,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-@app.post("/ocr")
+@app.post("/ai/ocr")
 async def ocr_api(file: UploadFile = File(...)):
     # 1️⃣ 이미지 파일 체크
     if not file.content_type.startswith("image/"):
