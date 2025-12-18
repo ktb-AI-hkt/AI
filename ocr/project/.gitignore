@@ -1,0 +1,21 @@
+# Secrets
+.env
+
+# Local test / debug files
+main.py
+vision_draw_boxes_with_text.py
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual env
+venv/
+.venv/
+ocr/
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+
