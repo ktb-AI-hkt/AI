@@ -76,19 +76,19 @@ jobs:
             echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
 
             # 기존 컨테이너 중지 및 제거
-            docker-compose -f docker-compose.prod.yml down
+            docker compose -f docker-compose.prod.yml down
 
             # 최신 이미지 Pull
-            docker-compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml pull
 
             # 새 컨테이너 실행
-            docker-compose -f docker-compose.prod.yml up -d
+            docker compose -f docker-compose.prod.yml up -d
 
             # 사용하지 않는 이미지 정리
             docker image prune -af
 
             # 컨테이너 상태 확인
-            docker-compose -f docker-compose.prod.yml ps
+            docker compose -f docker-compose.prod.yml ps
 
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.0.3
