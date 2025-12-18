@@ -10,6 +10,14 @@ app = FastAPI(
     version="1.0.0"
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],      # 모든 출처 허용
+    allow_credentials=True,   # 쿠키 포함 허용
+    allow_methods=["*"],      # GET, POST, PUT, DELETE 등 모든 메서드 허용
+    allow_headers=["*"],      # 모든 헤더 허용
+)
+
 @app.post("/ai/ocr")
 async def ocr_api(file: UploadFile = File(...)):
     # 1️⃣ 이미지 파일 체크
