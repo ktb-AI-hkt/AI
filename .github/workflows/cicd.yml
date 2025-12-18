@@ -1,0 +1,95 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  DOCKER_IMAGE: ${{ secrets.DOCKER_USERNAME }}/ocr-api
+  DOCKER_TAG: ${{ github.sha }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
+            ${{ env.DOCKER_IMAGE }}:latest
+          cache-from: type=registry,ref=${{ env.DOCKER_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.DOCKER_IMAGE }}:buildcache,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Docker 로그인
+            echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+
+            # 기존 컨테이너 중지 및 제거
+            docker stop ocr-api || true
+            docker rm ocr-api || true
+
+            # 최신 이미지 Pull
+            docker pull ${{ env.DOCKER_IMAGE }}:latest
+
+            # 새 컨테이너 실행
+            docker run -d \
+              --name ocr-api \
+              -p 8000:8000 \
+              -e GOOGLE_API_KEY="${{ secrets.GOOGLE_API_KEY }}" \
+              -e OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
+              --restart unless-stopped \
+              ${{ env.DOCKER_IMAGE }}:latest
+
+            # 사용하지 않는 이미지 정리
+            docker image prune -af
+
+            # 컨테이너 상태 확인
+            docker ps | grep ocr-api
+
+      - name: Verify deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # 헬스 체크 (최대 30초 대기)
+            for i in {1..6}; do
+              if curl -f http://localhost:8000/docs > /dev/null 2>&1; then
+                echo "Deployment successful!"
+                exit 0
+              fi
+              echo "Waiting for service to be ready... ($i/6)"
+              sleep 5
+            done
+            echo "Deployment verification failed"
+            exit 1
