@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - cicd
 
 env:
   DOCKER_IMAGE: ${{ secrets.DOCKER_USERNAME }}/ocr-api
@@ -43,6 +44,18 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create deployment directory and transfer files
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "docker-compose.prod.yml"
+          target: "~/ocr-api"
+
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -50,30 +63,32 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            cd ~/ocr-api
+
+            # .env 파일 생성
+            cat > .env << EOF
+            DOCKER_IMAGE=${{ env.DOCKER_IMAGE }}:latest
+            GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            EOF
+
             # Docker 로그인
             echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
 
             # 기존 컨테이너 중지 및 제거
-            docker stop ocr-api || true
-            docker rm ocr-api || true
+            docker-compose -f docker-compose.prod.yml down
 
             # 최신 이미지 Pull
-            docker pull ${{ env.DOCKER_IMAGE }}:latest
+            docker-compose -f docker-compose.prod.yml pull
 
             # 새 컨테이너 실행
-            docker run -d \
-              --name ocr-api \
-              -p 8000:8000 \
-              -e GOOGLE_API_KEY="${{ secrets.GOOGLE_API_KEY }}" \
-              -e OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
-              --restart unless-stopped \
-              ${{ env.DOCKER_IMAGE }}:latest
+            docker-compose -f docker-compose.prod.yml up -d
 
             # 사용하지 않는 이미지 정리
             docker image prune -af
 
             # 컨테이너 상태 확인
-            docker ps | grep ocr-api
+            docker-compose -f docker-compose.prod.yml ps
 
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.0.3
@@ -86,10 +101,12 @@ jobs:
             for i in {1..6}; do
               if curl -f http://localhost:8000/docs > /dev/null 2>&1; then
                 echo "Deployment successful!"
+                docker logs ocr-api --tail 20
                 exit 0
               fi
               echo "Waiting for service to be ready... ($i/6)"
               sleep 5
             done
             echo "Deployment verification failed"
+            docker logs ocr-api --tail 50
             exit 1

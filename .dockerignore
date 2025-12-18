@@ -2,6 +2,13 @@
 .git
 .gitignore
 .gitattributes
+.github/
+
+# Docker
+Dockerfile
+docker-compose.yml
+docker-compose.prod.yml
+.dockerignore
 
 # Python
 __pycache__
@@ -47,3 +54,12 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+
+# Test images and media files
+images/
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.webp
